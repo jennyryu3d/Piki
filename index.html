@@ -61,7 +61,7 @@
 
   /* ---------- Tabs (top menu) ---------- */
   .tabs{display:flex;gap:6px;margin:8px 18px 2px;}
-  .tab{flex:1;padding:12px 4px;border-radius:13px;font-size:14.5px;font-weight:600;color:var(--ink);background:var(--card);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s;}
+  .tab{flex:1;padding:12px 3px;border-radius:13px;font-size:13.5px;font-weight:600;color:var(--ink);background:var(--card);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;transition:.15s;}
   .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 6px 16px rgba(46,110,94,.28);}
   .tab .cnt{font-size:11px;font-weight:600;background:rgba(0,0,0,.06);padding:1px 7px;border-radius:99px;line-height:1.5;}
   .tab.active .cnt{background:rgba(255,255,255,.28);}
@@ -181,7 +181,7 @@
 
   <!-- Gate -->
   <div id="gate" class="gate">
-    <span class="ver-gate">v5</span>
+    <span class="ver-gate">v6</span>
     <div class="brand">
       <div class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg></div>
       <span class="logo">피키</span>
@@ -205,7 +205,7 @@
     <header>
       <span class="logo">피키</span>
       <div class="hbtns">
-        <span class="ver">v5</span>
+        <span class="ver">v6</span>
         <button class="iconbtn" id="btnSettings" aria-label="설정"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3H9.8l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4.4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
         <button class="iconbtn" id="btnLock" aria-label="잠그기"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/></svg></button>
       </div>
@@ -315,7 +315,7 @@ function defaultSchema(){return{
     {id:'memo',label:'메모',type:'textarea'},
   ],
 };}
-const CATS={address:{label:'주소'},password:{label:'패스워드'},person:{label:'사람'}};
+const CATS={address:{label:'주소'},password:{label:'패스워드'},person:{label:'기억할 사람'}};
 const ORDER=['address','password','person'];
 const DEFAULT_HINT='너가 제일 많이 사용했던 핀번호야';
 
