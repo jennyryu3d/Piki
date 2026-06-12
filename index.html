@@ -176,6 +176,8 @@
   .linkbtn:active{color:var(--ink);}
   .autoconv{width:100%;margin:-4px 0 14px;background:var(--accent-soft);color:var(--accent-ink);font-size:13.5px;font-weight:600;padding:11px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:7px;}
   .autoconv:active{opacity:.8;}
+  .lockmark{display:inline-flex;vertical-align:middle;margin-left:6px;color:var(--accent);}
+  .lockedbar{display:flex;align-items:center;gap:7px;background:var(--accent-soft);color:var(--accent-ink);font-size:12.5px;font-weight:600;padding:10px 13px;border-radius:11px;margin-bottom:10px;}
   .ver{font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:5px 9px;border-radius:99px;align-self:center;letter-spacing:.3px;}
   .ver-gate{position:absolute;top:16px;right:18px;font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:5px 10px;border-radius:99px;letter-spacing:.3px;z-index:3;}
 </style>
@@ -185,7 +187,7 @@
 
   <!-- Gate -->
   <div id="gate" class="gate">
-    <span class="ver-gate">v7</span>
+    <span class="ver-gate">v8</span>
     <div class="brand">
       <div class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg></div>
       <span class="logo">피키</span>
@@ -210,7 +212,7 @@
     <header>
       <span class="logo">피키</span>
       <div class="hbtns">
-        <span class="ver">v7</span>
+        <span class="ver">v8</span>
         <button class="iconbtn" id="btnSettings" aria-label="설정"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3H9.8l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4.4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
         <button class="iconbtn" id="btnLock" aria-label="잠그기"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/></svg></button>
       </div>
@@ -240,6 +242,17 @@
       <div class="dlg-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.5.4.5 1 .5 1.6h6c0-.6 0-1.2.5-1.6A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div id="dlgMsg" class="dlg-msg"></div>
       <button class="btn save" id="dlgOk" style="margin-top:18px;">확인</button>
+    </div>
+  </div>
+
+  <div class="dlg-ov" id="reauthOv">
+    <div class="dialog">
+      <div class="dlg-ic" style="background:var(--accent-soft);color:var(--accent-ink);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg></div>
+      <div class="dlg-msg">잠긴 항목이에요</div>
+      <div style="font-size:13px;color:var(--muted);margin:6px 0 12px;">보려면 비밀번호를 한 번 더 입력하세요.</div>
+      <div class="pwbox" style="text-align:left;"><input id="reauthPw" type="password" autocomplete="off" placeholder="비밀번호" style="background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;"></div>
+      <div id="reauthErr" class="err" style="text-align:center;"></div>
+      <div class="btns"><button class="btn ghost" id="reauthCancel">취소</button><button class="btn save" id="reauthOk">확인</button></div>
     </div>
   </div>
 
@@ -328,14 +341,16 @@ const NOPASS_SRC='piki-open-mode-2024';
 
 /* ensure schema has newer fields (non-destructive migration) */
 function ensureSchema(v){
-  if(!v.schema) v.schema=defaultSchema();
-  ['address','password','person'].forEach(c=>{ if(!Array.isArray(v.schema[c])) v.schema[c]=defaultSchema()[c]; if(!Array.isArray(v[c])) v[c]=[]; });
+  let changed=false;
+  if(!v.schema){ v.schema=defaultSchema(); changed=true; }
+  ['address','password','person'].forEach(c=>{ if(!Array.isArray(v.schema[c])){ v.schema[c]=defaultSchema()[c]; changed=true; } if(!Array.isArray(v[c])){ v[c]=[]; changed=true; } });
   const a=v.schema.address;
   const hasEn=a.some(f=>f.id==='value_en');
   if(!hasEn){
     const vi=a.findIndex(f=>f.id==='value');
-    if(vi>=0){ a[vi].label='한글 주소'; a.splice(vi+1,0,{id:'value_en',label:'영문 주소 (자동)',type:'textarea',copy:true}); }
+    if(vi>=0){ a[vi].label='한글 주소'; a.splice(vi+1,0,{id:'value_en',label:'영문 주소 (자동)',type:'textarea',copy:true}); changed=true; }
   }
+  return changed;
 }
 
 /* ===== Korean -> Roman (Revised Romanization, best-effort) ===== */
@@ -500,7 +515,7 @@ function startLockout(){
 /* ===== Open / Lock ===== */
 function openMain(){
   $('pw1').value='';$('pw2').value='';
-  if(VAULT) ensureSchema(VAULT);
+  if(VAULT && ensureSchema(VAULT)) persist();
   $('btnLock').classList.toggle('hidden', noPass);
   gate.classList.add('hidden'); main.classList.remove('hidden');
   buildTabs(); render(); updateStorageWarn(); resetIdle();
@@ -544,8 +559,9 @@ function render(){
   items.forEach(it=>{
     const prim=it[pf.id]||'(제목 없음)';
     const sec=secondary(CUR,it);
+    const lk=(CUR==='password'&&it._lock&&!noPass)?'<span class="lockmark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/></svg></span>':'';
     const card=document.createElement('div'); card.className='card';
-    card.innerHTML='<div class="avatar">'+escapeHtml(initial(prim))+'</div><div class="body"><div class="t1">'+escapeHtml(prim)+'</div>'+(sec?'<div class="t2">'+escapeHtml(sec)+'</div>':'')+'</div><span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+    card.innerHTML='<div class="avatar">'+escapeHtml(initial(prim))+'</div><div class="body"><div class="t1">'+escapeHtml(prim)+lk+'</div>'+(sec?'<div class="t2">'+escapeHtml(sec)+'</div>':'')+'</div><span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
     card.onclick=()=>openDetail(it);
     list.appendChild(card);
   });
@@ -574,21 +590,25 @@ $('sheetBack').onclick=()=>{if(backFn)backFn();};
 /* ===== Detail ===== */
 function openDetail(it){
   const fields=VAULT.schema[CUR]; let html='';
+  const itemLocked = CUR==='password' && it._lock && !noPass;
+  if(itemLocked) html+='<div class="lockedbar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg>추가 잠금된 항목 · 비밀번호는 확인 후 보여요</div>';
   fields.forEach(f=>{
     const v=it[f.id]; if(!v)return;
     const id='v_'+f.id, masked=f.type==='secret', mono=masked||f.type==='text'&&f.mono;
     html+='<div class="drow"><div style="flex:1;min-width:0;"><div class="dlab">'+escapeHtml(f.label)+'</div>'
       +'<div class="dval '+(mono?'mono':'')+' '+(masked?'masked':'')+'" id="'+id+'" data-real="'+escapeHtml(v)+'" data-masked="'+(masked?'1':'0')+'">'+(masked?'••••••••':escapeHtml(v))+'</div></div>'
       +'<div class="dactions">'+(masked?'<button class="da" data-eye="'+id+'">'+eyeSvg(false)+'</button>':'')
-      +((f.copy||masked)?'<button class="da" data-copy="'+escapeHtml(v)+'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H15" stroke="currentColor" stroke-width="1.8"/></svg></button>':'')
+      +((f.copy||masked)?'<button class="da" data-copy="'+escapeHtml(v)+'"'+(masked?' data-sec="1"':'')+'><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H15" stroke="currentColor" stroke-width="1.8"/></svg></button>':'')
       +'</div></div>';
   });
   html+='<div class="btns"><button class="btn ghost" id="dEdit">편집</button><button class="btn del" id="dDel">삭제</button></div>';
   openSheet(it[VAULT.schema[CUR][0].id]||'상세', html);
-  $('sheetBody').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
+  let unlocked=!itemLocked;            // locked secret needs re-auth once
+  const guard=fn=>{ if(unlocked) fn(); else askReauth(()=>{ unlocked=true; fn(); }); };
+  $('sheetBody').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ const t=b.dataset.copy; if(b.dataset.sec) guard(()=>copy(t)); else copy(t); });
   $('sheetBody').querySelectorAll('[data-eye]').forEach(b=>b.onclick=()=>{
-    const el=$(b.dataset.eye), open=el.dataset.masked==='1';
-    el.textContent=open?el.dataset.real:'••••••••'; el.classList.toggle('masked',!open); el.dataset.masked=open?'0':'1'; b.innerHTML=eyeSvg(open);
+    const doToggle=()=>{ const el=$(b.dataset.eye), open=el.dataset.masked==='1'; el.textContent=open?el.dataset.real:'••••••••'; el.classList.toggle('masked',!open); el.dataset.masked=open?'0':'1'; b.innerHTML=eyeSvg(open); };
+    guard(doToggle);
   });
   $('dEdit').onclick=()=>openForm(it);
   $('dDel').onclick=()=>{ if(confirm('이 항목을 삭제할까요?')){ VAULT[CUR]=VAULT[CUR].filter(x=>x.id!==it.id); persist(); closeSheet(); buildTabs(); render(); toast('삭제했어요'); } };
@@ -606,6 +626,13 @@ function openForm(existing){
   html+='<div class="err" id="fErr"></div><div class="btns"><button class="btn save" id="fSave">저장</button></div>';
   openSheet(existing?'편집':CATS[CUR].label+' 추가', html);
   $('sheetBody').querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{const t=$(b.dataset.ft);const s=t.type==='password';t.type=s?'text':'password';b.innerHTML=eyeSvg(s);});
+  // password: per-item extra lock toggle (only in secure mode)
+  if(CUR==='password' && !noPass){
+    const row=document.createElement('div'); row.className='frow';
+    row.innerHTML='<div class="switchrow"><span>🔒 이 항목 추가 잠금<br><small style="font-weight:400;color:var(--muted);">볼 때 비밀번호를 한 번 더 확인</small></span><button type="button" class="switch '+((existing&&existing._lock)?'on':'')+'" id="lockToggle"></button></div>';
+    const err=$('fErr'); err.parentNode.insertBefore(row, err);
+    $('lockToggle').onclick=()=>$('lockToggle').classList.toggle('on');
+  }
   // address: auto romanize Korean -> English
   if(CUR==='address'){
     const ko=$('f_value'), en=$('f_value_en');
@@ -622,6 +649,7 @@ function openForm(existing){
     const fs=VAULT.schema[CUR], obj={};
     fs.forEach(f=>{obj[f.id]=$('f_'+f.id).value.trim();});
     if(!obj[fs[0].id]){$('fErr').textContent=fs[0].label+'은(는) 꼭 입력해 주세요.';return;}
+    if(CUR==='password'){ const lt=$('lockToggle'); obj._lock = lt? lt.classList.contains('on') : (existing&&existing._lock)||false; }
     if(existing){ obj.id=existing.id; VAULT[CUR][VAULT[CUR].findIndex(x=>x.id===existing.id)]=obj; toast('수정했어요'); }
     else{ obj.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6); VAULT[CUR].unshift(obj); toast('추가했어요'); }
     persist(); closeSheet(); buildTabs(); render();
@@ -644,6 +672,28 @@ function showDialog(m){$('dlgMsg').textContent=m;$('dlgOv').classList.add('show'
 $('dlgOk').onclick=()=>$('dlgOv').classList.remove('show');
 $('dlgOv').onclick=e=>{if(e.target===$('dlgOv'))$('dlgOv').classList.remove('show');};
 
+/* ===== Re-auth (per-item extra lock) ===== */
+async function verifyPassword(pw){
+  try{ const k=await deriveKey(pw, ub64(await sGet('piki.salt'))); await decryptObj(k, await sGet('piki.vault')); return true; }catch(e){ return false; }
+}
+let reauthCb=null;
+function askReauth(cb){
+  reauthCb=cb; $('reauthPw').value=''; $('reauthErr').textContent='';
+  $('reauthOv').classList.add('show'); setTimeout(()=>$('reauthPw').focus(),100);
+}
+function closeReauth(){ $('reauthOv').classList.remove('show'); reauthCb=null; }
+$('reauthCancel').onclick=closeReauth;
+$('reauthOv').onclick=e=>{ if(e.target===$('reauthOv')) closeReauth(); };
+$('reauthPw').addEventListener('keydown',e=>{ if(e.key==='Enter') $('reauthOk').click(); });
+$('reauthOk').onclick=async()=>{
+  const pw=$('reauthPw').value; if(!pw){$('reauthErr').textContent='비밀번호를 입력하세요.';return;}
+  $('reauthOk').disabled=true;
+  const ok=await verifyPassword(pw);
+  $('reauthOk').disabled=false;
+  if(ok){ const cb=reauthCb; closeReauth(); if(cb)cb(); }
+  else{ $('reauthErr').textContent='비밀번호가 올바르지 않아요.'; $('reauthPw').value=''; }
+};
+
 /* ===== Settings ===== */
 $('btnSettings').onclick=openSettings;
 function openSettings(){
@@ -651,6 +701,7 @@ function openSettings(){
    '<button class="menu-item" id="mFields"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>항목(필드) 편집<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
   +'<button class="menu-item" id="mHint"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 18h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.5 1 .5 1.6h6c0-.6 0-1.2.5-1.6A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>잠금화면 힌트<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
   +'<button class="menu-item" id="mPw"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg></span>'+(noPass?'비밀번호 설정하기':'비밀번호 변경')+'<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
+  +(noPass?'':'<button class="menu-item" id="mNoPass"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 10.5V8a4 4 0 0 1 7-2.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>잠금 끄기 (비밀번호 없이)<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>')
   +'<button class="menu-item" id="mExport"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 15V4m0 0L8 8m4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>백업하기 (구글 드라이브 등)</button>'
   +'<button class="menu-item" id="mImport"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>백업 가져오기</button>'
   +'<button class="menu-item danger" id="mWipe"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>전체 삭제 (초기화)</button>'
@@ -659,6 +710,7 @@ function openSettings(){
   $('mFields').onclick=openFieldPick;
   $('mHint').onclick=editHint;
   $('mPw').onclick=changePw;
+  if($('mNoPass')) $('mNoPass').onclick=removePassword;
   $('mExport').onclick=exportBackup;
   $('mImport').onclick=importBackup;
   $('mWipe').onclick=wipeAll;
@@ -762,6 +814,18 @@ function changePw(){
     if(setting){ noPass=false; await sDel('piki.nopass'); $('btnLock').classList.remove('hidden'); resetIdle(); }
     closeSheet(); toast(setting?'비밀번호를 설정했어요':'비밀번호를 변경했어요');
   };
+}
+
+/* ===== Remove password (switch to open mode) ===== */
+async function removePassword(){
+  if(!confirm('잠금을 끄면 누구나 이 기기에서 피키를 열어 내용을 볼 수 있어요.\n계속할까요? (나중에 다시 비밀번호를 설정할 수 있어요.)'))return;
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  KEY=await deriveKey(NOPASS_SRC,salt);
+  await sSet('piki.salt',b64(salt));
+  await sSet('piki.nopass','1'); noPass=true;
+  await persist();
+  $('btnLock').classList.add('hidden'); clearTimeout(idleTimer);
+  closeSheet(); render(); toast('잠금을 껐어요');
 }
 
 /* ===== Backup (share -> Google Drive) ===== */
