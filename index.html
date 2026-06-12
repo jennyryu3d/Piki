@@ -172,6 +172,10 @@
   .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:99px;font-size:13.5px;font-weight:500;z-index:60;opacity:0;transition:.25s;pointer-events:none;box-shadow:var(--shadow);max-width:88%;text-align:center;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .hidden{display:none!important;}
+  .linkbtn{margin-top:14px;color:var(--muted);font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:6px;}
+  .linkbtn:active{color:var(--ink);}
+  .autoconv{width:100%;margin:-4px 0 14px;background:var(--accent-soft);color:var(--accent-ink);font-size:13.5px;font-weight:600;padding:11px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:7px;}
+  .autoconv:active{opacity:.8;}
   .ver{font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:5px 9px;border-radius:99px;align-self:center;letter-spacing:.3px;}
   .ver-gate{position:absolute;top:16px;right:18px;font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:5px 10px;border-radius:99px;letter-spacing:.3px;z-index:3;}
 </style>
@@ -181,7 +185,7 @@
 
   <!-- Gate -->
   <div id="gate" class="gate">
-    <span class="ver-gate">v6</span>
+    <span class="ver-gate">v7</span>
     <div class="brand">
       <div class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg></div>
       <span class="logo">피키</span>
@@ -196,7 +200,8 @@
       <div class="pwbox"><input id="pw2" type="password" autocomplete="off" placeholder="••••••"><button class="eye" data-target="pw2" aria-label="표시"></button></div>
     </div>
     <div id="gateErr" class="err"></div>
-    <button id="gateBtn" class="btn-primary">잠금 해제</button>
+    <button id="gateBtn" class="btn-primary">Sign in</button>
+    <button id="noPassBtn" class="linkbtn hidden">비밀번호 없이 시작하기</button>
     <div id="gateHint" class="hint"></div>
   </div>
 
@@ -205,7 +210,7 @@
     <header>
       <span class="logo">피키</span>
       <div class="hbtns">
-        <span class="ver">v6</span>
+        <span class="ver">v7</span>
         <button class="iconbtn" id="btnSettings" aria-label="설정"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3H9.8l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4.4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
         <button class="iconbtn" id="btnLock" aria-label="잠그기"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="2"/></svg></button>
       </div>
@@ -296,7 +301,8 @@ function updateStorageWarn(){ const w=document.getElementById('storeWarn'); if(w
 function defaultSchema(){return{
   address:[
     {id:'title',label:'이름 / 라벨',type:'text',primary:true},
-    {id:'value',label:'주소',type:'textarea',copy:true},
+    {id:'value',label:'한글 주소',type:'textarea',copy:true},
+    {id:'value_en',label:'영문 주소 (자동)',type:'textarea',copy:true},
     {id:'memo',label:'메모',type:'textarea'},
   ],
   password:[
@@ -318,10 +324,81 @@ function defaultSchema(){return{
 const CATS={address:{label:'주소'},password:{label:'패스워드'},person:{label:'기억할 사람'}};
 const ORDER=['address','password','person'];
 const DEFAULT_HINT='너가 제일 많이 사용했던 핀번호야';
+const NOPASS_SRC='piki-open-mode-2024';
+
+/* ensure schema has newer fields (non-destructive migration) */
+function ensureSchema(v){
+  if(!v.schema) v.schema=defaultSchema();
+  ['address','password','person'].forEach(c=>{ if(!Array.isArray(v.schema[c])) v.schema[c]=defaultSchema()[c]; if(!Array.isArray(v[c])) v[c]=[]; });
+  const a=v.schema.address;
+  const hasEn=a.some(f=>f.id==='value_en');
+  if(!hasEn){
+    const vi=a.findIndex(f=>f.id==='value');
+    if(vi>=0){ a[vi].label='한글 주소'; a.splice(vi+1,0,{id:'value_en',label:'영문 주소 (자동)',type:'textarea',copy:true}); }
+  }
+}
+
+/* ===== Korean -> Roman (Revised Romanization, best-effort) ===== */
+const RR_CHO=['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
+const RR_JUNG=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
+const RR_CODA=['','k','k','k','n','n','n','t','l','k','m','l','l','l','p','l','m','p','p','t','t','ng','t','t','k','t','p','t'];
+const RR_LINK=['','g','kk','ks','n','nj','nh','d','r','lg','lm','lb','ls','lt','lp','lh','m','b','ps','s','ss','ng','j','ch','k','t','p','h'];
+function isSyl(c){const x=c.charCodeAt(0);return x>=0xAC00&&x<=0xD7A3;}
+function decomp(c){const x=c.charCodeAt(0)-0xAC00;return [Math.floor(x/588),Math.floor((x%588)/28),x%28];}
+function romanize(text){
+  const ch=[...String(text)]; let out='';
+  for(let i=0;i<ch.length;i++){
+    const c=ch[i];
+    if(!isSyl(c)){ out+=c; continue; }
+    const [cho,jung,jong]=decomp(c);
+    out+=RR_CHO[cho]+RR_JUNG[jung];
+    if(jong>0){
+      const nx=ch[i+1];
+      if(nx&&isSyl(nx)&&decomp(nx)[0]===11) out+=RR_LINK[jong];
+      else out+=RR_CODA[jong];
+    }
+  }
+  return out;
+}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+function mapAddrToken(tok){
+  const rules=[
+    ['특별자치시',s=>cap(romanize(s))],
+    ['특별자치도',s=>cap(romanize(s))+'-do'],
+    ['특별시',s=>cap(romanize(s))],
+    ['광역시',s=>cap(romanize(s))],
+    ['대로',s=>cap(romanize(s))+'-daero'],
+    ['로',s=>cap(romanize(s))+'-ro'],
+    ['길',s=>cap(romanize(s))+'-gil'],
+    ['도',s=>cap(romanize(s))+'-do'],
+    ['시',s=>cap(romanize(s))+'-si'],
+    ['군',s=>cap(romanize(s))+'-gun'],
+    ['구',s=>cap(romanize(s))+'-gu'],
+    ['읍',s=>cap(romanize(s))+'-eup'],
+    ['면',s=>cap(romanize(s))+'-myeon'],
+    ['동',s=>cap(romanize(s))+'-dong'],
+    ['리',s=>cap(romanize(s))+'-ri'],
+    ['가',s=>cap(romanize(s))+'-ga'],
+  ];
+  for(const [suf,fn] of rules){ if(tok.endsWith(suf)&&tok.length>suf.length) return fn(tok.slice(0,tok.length-suf.length)); }
+  return cap(romanize(tok));
+}
+function koAddressToEnglish(raw){
+  if(!raw||!raw.trim()) return '';
+  let s=raw.trim().replace(/\n/g,' ');
+  let zip='';
+  s=s.replace(/\(?\b(\d{5})\b\)?/,(m,z)=>{zip=z;return ' ';});
+  const tokens=s.split(/\s+/).filter(Boolean).map(mapAddrToken);
+  tokens.reverse();
+  let res=tokens.filter(Boolean).join(', ');
+  if(zip) res+=(res?', ':'')+zip;
+  res+=(res?', ':'')+'Republic of Korea';
+  return res;
+}
 
 /* ===== State ===== */
 let KEY=null, VAULT=null, CUR='address', idleTimer=null;
-let isSetup=false, attempts=0, locked=false, HINT=DEFAULT_HINT;
+let isSetup=false, attempts=0, locked=false, HINT=DEFAULT_HINT, noPass=false;
 
 const $=id=>document.getElementById(id);
 const gate=$('gate'),main=$('main');
@@ -330,15 +407,23 @@ const gate=$('gate'),main=$('main');
 (async function boot(){
   const salt=await sGet('piki.salt');
   HINT=(await sGet('piki.hint'))||DEFAULT_HINT;
+  noPass=(await sGet('piki.nopass'))==='1';
   isSetup=!salt;
   if(isSetup){
     $('gateTag').textContent='나만의 안전한 기록장.\n사용할 비밀번호를 만들어 주세요.';
     $('lab1').textContent='새 비밀번호'; $('confirmWrap').classList.remove('hidden');
-    $('gateBtn').textContent='피키 시작하기';
+    $('gateBtn').textContent='Sign up';
+    $('noPassBtn').classList.remove('hidden');
     $('gateHint').textContent='이 비밀번호로 모든 기록이 암호화됩니다. 비밀번호는 어디에도 저장되지 않으니 잊지 마세요 — 분실 시 복구할 수 없어요.';
+  }else if(noPass){
+    // open mode: no lock screen, sign in automatically
+    try{
+      const k=await deriveKey(NOPASS_SRC, ub64(await sGet('piki.salt')));
+      VAULT=await decryptObj(k, await sGet('piki.vault'));
+      KEY=k; ensureSchema(VAULT); openMain();
+    }catch(e){ $('gateTag').textContent='문제가 발생했어요. 새로고침해 주세요.'; }
   }else{
     $('gateTag').textContent='다시 만나서 반가워요.\n비밀번호를 입력해 주세요.';
-    $('gateHint').textContent= hasStore?'':'⚠ 이 환경에서는 저장이 유지되지 않을 수 있어요.';
   }
 })();
 
@@ -355,6 +440,19 @@ function eyeSvg(open){return open
 $('gateBtn').onclick=submitGate;
 $('pw1').addEventListener('keydown',e=>{if(e.key==='Enter'){isSetup?$('pw2').focus():submitGate();}});
 $('pw2').addEventListener('keydown',e=>{if(e.key==='Enter')submitGate();});
+$('noPassBtn').onclick=startNoPass;
+
+async function startNoPass(){
+  if(!confirm('비밀번호 없이 시작하면 누구나 이 기기에서 피키를 열어 내용을 볼 수 있어요.\n그래도 진행할까요? (나중에 설정에서 비밀번호를 추가할 수 있어요.)')) return;
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  KEY=await deriveKey(NOPASS_SRC,salt);
+  VAULT={schema:defaultSchema(),address:[],password:[],person:[]};
+  await sSet('piki.salt',b64(salt));
+  await sSet('piki.nopass','1'); noPass=true;
+  await sSet('piki.hint',DEFAULT_HINT); HINT=DEFAULT_HINT;
+  await sSet('piki.vault',await encryptObj(KEY,VAULT));
+  attempts=0; openMain();
+}
 
 async function submitGate(){
   if(locked)return;
@@ -368,6 +466,7 @@ async function submitGate(){
       const salt=crypto.getRandomValues(new Uint8Array(16));
       KEY=await deriveKey(pw,salt);
       VAULT={schema:defaultSchema(),address:[],password:[],person:[]};
+      noPass=false; await sDel('piki.nopass');
       await sSet('piki.salt',b64(salt));
       await sSet('piki.hint',DEFAULT_HINT); HINT=DEFAULT_HINT;
       await sSet('piki.vault',await encryptObj(KEY,VAULT));
@@ -377,8 +476,7 @@ async function submitGate(){
         const salt=ub64(await sGet('piki.salt'));
         const k=await deriveKey(pw,salt);
         const v=await decryptObj(k,await sGet('piki.vault'));
-        KEY=k; VAULT=v; if(!VAULT.schema)VAULT.schema=defaultSchema();
-        ['address','password','person'].forEach(c=>{if(!Array.isArray(VAULT[c]))VAULT[c]=[];});
+        KEY=k; VAULT=v; ensureSchema(VAULT);
         attempts=0; openMain();
       }catch(err){ attempts++; handleFail(); }
     }
@@ -396,25 +494,28 @@ function startLockout(){
   $('gateBtn').disabled=true; $('pw1').disabled=true; $('gateErr').textContent='5회 모두 실패했어요. 잠시 후 다시 시도해 주세요.';
   const upd=()=>{$('gateBtn').textContent=s+'초 후 재시도';};
   upd();
-  const t=setInterval(()=>{ s--; if(s<=0){clearInterval(t);locked=false;attempts=0;$('gateBtn').disabled=false;$('pw1').disabled=false;$('gateBtn').textContent='잠금 해제';$('gateErr').textContent='';} else upd(); },1000);
+  const t=setInterval(()=>{ s--; if(s<=0){clearInterval(t);locked=false;attempts=0;$('gateBtn').disabled=false;$('pw1').disabled=false;$('gateBtn').textContent='Sign in';$('gateErr').textContent='';} else upd(); },1000);
 }
 
 /* ===== Open / Lock ===== */
 function openMain(){
   $('pw1').value='';$('pw2').value='';
+  if(VAULT) ensureSchema(VAULT);
+  $('btnLock').classList.toggle('hidden', noPass);
   gate.classList.add('hidden'); main.classList.remove('hidden');
   buildTabs(); render(); updateStorageWarn(); resetIdle();
 }
 function lock(){
+  if(noPass) return;
   KEY=null;VAULT=null; clearTimeout(idleTimer); closeSheet();
   main.classList.add('hidden'); gate.classList.remove('hidden');
   $('gateTag').textContent='다시 만나서 반가워요.\n비밀번호를 입력해 주세요.';
-  $('lab1').textContent='비밀번호'; $('gateBtn').textContent='잠금 해제';
-  $('confirmWrap').classList.add('hidden'); $('gateHint').textContent='';
+  $('lab1').textContent='비밀번호'; $('gateBtn').textContent='Sign in';
+  $('confirmWrap').classList.add('hidden'); $('noPassBtn').classList.add('hidden'); $('gateHint').textContent='';
   isSetup=false; attempts=0; $('pw1').focus();
 }
 $('btnLock').onclick=lock;
-function resetIdle(){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{if(KEY)lock();},5*60*1000);}
+function resetIdle(){clearTimeout(idleTimer);if(noPass)return;idleTimer=setTimeout(()=>{if(KEY)lock();},5*60*1000);}
 ['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{if(KEY)resetIdle();},{passive:true}));
 
 /* ===== Tabs ===== */
@@ -505,6 +606,18 @@ function openForm(existing){
   html+='<div class="err" id="fErr"></div><div class="btns"><button class="btn save" id="fSave">저장</button></div>';
   openSheet(existing?'편집':CATS[CUR].label+' 추가', html);
   $('sheetBody').querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{const t=$(b.dataset.ft);const s=t.type==='password';t.type=s?'text':'password';b.innerHTML=eyeSvg(s);});
+  // address: auto romanize Korean -> English
+  if(CUR==='address'){
+    const ko=$('f_value'), en=$('f_value_en');
+    if(ko&&en){
+      const btn=document.createElement('button');
+      btn.type='button'; btn.className='autoconv';
+      btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 9h11l-3-3M20 15H9l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>한글 주소 → 영문 자동 변환';
+      const frow=en.closest('.frow'); frow.parentNode.insertBefore(btn, frow.nextSibling);
+      btn.onclick=()=>{ en.value=koAddressToEnglish(ko.value); if(en.value)toast('영문 주소를 채웠어요 (수정 가능)'); };
+      ko.addEventListener('blur',()=>{ if(!en.value.trim()&&ko.value.trim()) en.value=koAddressToEnglish(ko.value); });
+    }
+  }
   $('fSave').onclick=()=>{
     const fs=VAULT.schema[CUR], obj={};
     fs.forEach(f=>{obj[f.id]=$('f_'+f.id).value.trim();});
@@ -537,7 +650,7 @@ function openSettings(){
   const html=
    '<button class="menu-item" id="mFields"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>항목(필드) 편집<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
   +'<button class="menu-item" id="mHint"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 18h6M12 3a6 6 0 0 0-3.5 10.9c.5.4.5 1 .5 1.6h6c0-.6 0-1.2.5-1.6A6 6 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>잠금화면 힌트<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
-  +'<button class="menu-item" id="mPw"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg></span>비밀번호 변경<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
+  +'<button class="menu-item" id="mPw"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg></span>'+(noPass?'비밀번호 설정하기':'비밀번호 변경')+'<span class="arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>'
   +'<button class="menu-item" id="mExport"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 15V4m0 0L8 8m4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>백업하기 (구글 드라이브 등)</button>'
   +'<button class="menu-item" id="mImport"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>백업 가져오기</button>'
   +'<button class="menu-item danger" id="mWipe"><span class="mic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>전체 삭제 (초기화)</button>'
@@ -633,10 +746,12 @@ function editHint(){
 
 /* ===== Change password ===== */
 function changePw(){
-  const html='<div class="frow secret"><label>새 비밀번호</label><input id="np1" type="password" class="mono" autocomplete="off"><button class="eye" type="button" data-ft="np1">'+eyeSvg(false)+'</button></div>'
+  const setting=noPass; // true면 새로 설정(보안모드 전환)
+  const html=(setting?'<div class="hint" style="margin:2px 0 12px;">비밀번호를 설정하면 이제부터 잠금이 적용돼요. 분실 시 복구할 수 없으니 잊지 마세요.</div>':'')
+   +'<div class="frow secret"><label>새 비밀번호</label><input id="np1" type="password" class="mono" autocomplete="off"><button class="eye" type="button" data-ft="np1">'+eyeSvg(false)+'</button></div>'
    +'<div class="frow secret"><label>새 비밀번호 확인</label><input id="np2" type="password" class="mono" autocomplete="off"><button class="eye" type="button" data-ft="np2">'+eyeSvg(false)+'</button></div>'
-   +'<div class="err" id="npErr"></div><div class="btns"><button class="btn save" id="npSave">변경하기</button></div>';
-  openSheet('비밀번호 변경', html, openSettings);
+   +'<div class="err" id="npErr"></div><div class="btns"><button class="btn save" id="npSave">'+(setting?'비밀번호 설정':'변경하기')+'</button></div>';
+  openSheet(setting?'비밀번호 설정':'비밀번호 변경', html, openSettings);
   $('sheetBody').querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{const t=$(b.dataset.ft);const s=t.type==='password';t.type=s?'text':'password';b.innerHTML=eyeSvg(s);});
   $('npSave').onclick=async()=>{
     const a=$('np1').value,b=$('np2').value;
@@ -644,7 +759,8 @@ function changePw(){
     if(a!==b){$('npErr').textContent='비밀번호가 일치하지 않아요.';return;}
     const salt=crypto.getRandomValues(new Uint8Array(16));
     KEY=await deriveKey(a,salt); await sSet('piki.salt',b64(salt)); await persist();
-    closeSheet(); toast('비밀번호를 변경했어요');
+    if(setting){ noPass=false; await sDel('piki.nopass'); $('btnLock').classList.remove('hidden'); resetIdle(); }
+    closeSheet(); toast(setting?'비밀번호를 설정했어요':'비밀번호를 변경했어요');
   };
 }
 
@@ -673,6 +789,7 @@ function importBackup(){
         if(!d.address||!d.password||!d.person)throw 0;
         if(!confirm('현재 기록을 백업 내용으로 덮어쓸까요?'))return;
         VAULT={schema:d.schema||defaultSchema(),address:d.address||[],password:d.password||[],person:d.person||[]};
+        ensureSchema(VAULT);
         await persist(); closeSheet(); buildTabs(); render(); toast('백업을 가져왔어요');
       }catch(e){ alert('올바른 피키 백업 파일이 아니에요.'); } };
     r.readAsText(file); };
@@ -681,7 +798,7 @@ function importBackup(){
 async function wipeAll(){
   if(!confirm('모든 기록과 비밀번호가 삭제됩니다. 정말 초기화할까요?'))return;
   if(!confirm('이 작업은 되돌릴 수 없어요. 계속할까요?'))return;
-  await sDel('piki.salt'); await sDel('piki.vault'); await sDel('piki.hint');
+  await sDel('piki.salt'); await sDel('piki.vault'); await sDel('piki.hint'); await sDel('piki.nopass');
   KEY=null;VAULT=null; location.reload();
 }
 </script>
